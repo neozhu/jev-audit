@@ -42,15 +42,16 @@ Open **http://localhost:3000** after the server starts. In Windows PowerShell, y
 
 To explore the app, load a sample scenario, adjust the Jev criteria if needed, and run the audit. To create new criteria, enter your review focus in the Jev configuration panel.
 
-## Deploy with Docker
+## Deploy from Git with Portainer
 
-[`docker-compose.yml`](docker-compose.yml) takes `OPENAI_API_KEY` from your shell environment using `${OPENAI_API_KEY}`. Set the key in your shell, then disable Compose's automatic `.env` loading and start the service:
+1. In Portainer, select **Stacks → Add stack → Git repository**.
+2. Enter `https://github.com/neozhu/jev-audit.git` as the repository URL and `docker-compose.yml` as the Compose path.
+3. In the stack's **Environment variables** section, add `OPENAI_API_KEY` with your key. Optionally set `OPENAI_MODEL`, `TYPESAFE_API_KEY`, and `PORT`.
+4. Select **Deploy the stack** and open the host on port `3000`, or the port you configured.
 
-```bash
-COMPOSE_DISABLE_ENV_FILE=1 docker compose up -d --build
-```
+The Compose file uses `${OPENAI_API_KEY}` and the other Portainer stack variables; it does not use `env_file`. `OPENAI_MODEL` defaults to `gpt-6-luna`, `TYPESAFE_API_KEY` defaults to empty, and `PORT` defaults to `3000`. Keep real keys in Portainer rather than committing them to the repository.
 
-In PowerShell, run `$env:COMPOSE_DISABLE_ENV_FILE='1'` before `docker compose up -d --build`. You can also set `OPENAI_MODEL`, `TYPESAFE_API_KEY`, and `PORT` in the shell; the defaults are `gpt-6-luna`, empty, and `3000`. Open **http://localhost:3000**, or the port you set. Keep real API keys out of commits. To stop the service, run `docker compose down`.
+Portainer builds the image from the cloned repository. On a remote Docker environment, Portainer may reject Compose `build` steps; in that case, build and publish the image outside Portainer and replace `build: .` with an `image:` reference.
 
 ## Configuration
 
