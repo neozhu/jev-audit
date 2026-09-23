@@ -1,0 +1,12 @@
+services:
+  jev-audit:
+    build: .
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      PORT: ${PORT:-3000}
+      NODE_ENV: production
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    restart: unless-stopped

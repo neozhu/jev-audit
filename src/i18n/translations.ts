@@ -174,8 +174,8 @@ export interface Translations {
     statusLabel: string;
     saveKey: string;
     keySaved: string;
-    geminiTitle: string;
-    geminiDesc: string;
+    openaiTitle: string;
+    openaiDesc: string;
   };
 }
 
@@ -354,8 +354,8 @@ export const translations: Record<Language, Translations> = {
       statusLabel: '连接状态',
       saveKey: '保存 API Key',
       keySaved: '已保存 API Key',
-      geminiTitle: 'OpenAI 规范引擎',
-      geminiDesc: '配置 OPENAI_API_KEY 后可使用基于 OpenAI 模型的 Jev 评测标准实现。',
+      openaiTitle: 'OpenAI 规范引擎',
+      openaiDesc: '配置 OPENAI_API_KEY 后可使用基于 OpenAI 模型的 Jev 评测标准实现。',
     },
   },
   en: {
@@ -532,8 +532,8 @@ export const translations: Record<Language, Translations> = {
       statusLabel: 'Connection Status',
       saveKey: 'Save API Key',
       keySaved: 'API Key Saved',
-      geminiTitle: 'OpenAI Specification Engine',
-      geminiDesc: 'Configure OPENAI_API_KEY to use the OpenAI model for Jev evaluation.',
+      openaiTitle: 'OpenAI Specification Engine',
+      openaiDesc: 'Configure OPENAI_API_KEY to use the OpenAI model for Jev evaluation.',
     },
   },
 };
