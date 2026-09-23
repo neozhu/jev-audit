@@ -1,0 +1,6 @@
+{
+  "name": "AI 文本智能比对评测工具 (Jev Spec)",
+  "description": "基于 TypeSafe Jev 规范的 AI 智能比对工具，支持双文本输入、结构化 Jev 问题与指令评测、差异内容高亮与比对报告导出。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
