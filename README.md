@@ -14,19 +14,18 @@ An AI-powered contract comparison tool built around **Jev atomic evaluations**. 
 
 ## Why Jev Audit?
 
-Scanned contracts often mix harmless recognition errors with changes that affect the deal. A misread character is one thing; a payment deadline moving from **30 days to 60 days** is another. A plain text diff shows both, but does not tell a reviewer where to focus.
+Scanned contracts often mix harmless recognition errors with changes that affect the deal. A misread character is one thing; a payment deadline moving from **30 days to 60 days** is another.
 
-Jev Audit breaks review criteria into independent Jev questions, evaluates each document, and brings differences, evidence, and review routing into one report. It helps people find the important changes faster while keeping the final decision with the reviewer.
+Jev Audit asks Jev four questions: whether substantive terms match, whether there are observable signs of edits, what kind of difference exists, and how closely the terms match. The questions use Jev's Noul, Choice, and Score types. Their answers are converted to consistency values and combined into one weighted score. A score above 90% passes; 90% or below goes to manual review.
 
 ## What you can do
 
 | Capability | What it does |
 | --- | --- |
-| Compare two contracts | Paste or import the baseline and scanned-copy OCR text to inspect word-level differences and clause risks. |
-| Define Jev evaluations | Build review criteria with `noul` (yes/no), `choice` (category), and `score` (rating) questions. Edit or import the JSON configuration. |
+| Compare two contracts | Paste or import the baseline and scanned-copy OCR text to assess substantive consistency. |
+| Define Jev evaluations | Edit the four default Noul, Choice, and Score questions or import a JSON configuration. |
 | Generate questions with AI | Describe what matters to you and generate tailored Jev questions and evaluation instructions. |
-| Support review routing | Summarize substantive changes, OCR noise, consistency, and risk to suggest auto-pass or human review. |
-| Share the findings | Inspect differences and atomic results, copy the conclusion, or export an HTML report that can be printed to PDF. |
+| Support review routing | Compute a consistency score and apply the strict 90% threshold. |
 | Explore in two languages | Switch between English and Chinese and load sample contracts to try the full flow. |
 
 ## Quick start
@@ -71,9 +70,9 @@ See [`.env.example`](.env.example) for the full template. GPT is isolated to que
 flowchart LR
     A[Baseline contract] --> C[Jev atomic questions]
     B[Scanned-copy OCR text] --> C
-    C --> D[Independent evaluations and comparison]
-    D --> E[Substantive changes or OCR noise]
-    E --> F[Review decision and HTML report]
+    C --> D[Jev Noul, Choice, and Score answers]
+    D --> E[Weighted consistency score]
+    E --> F[Pass above 90%; otherwise manual review]
 ```
 
 ## Development

@@ -4,7 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { openai } from '@ai-sdk/openai';
 import { generateText } from 'ai';
-import { JevEvaluationConfig, JevQuestion } from './src/types/jev';
+import { JevEvaluationConfig, JevQuestion, JevRawAnswer } from './src/types/jev';
+import { calculateConsistency, isValidConsistencyConfig } from './src/utils/consistency';
+import { createConsistencyConfig } from './src/data/presets';
 
 dotenv.config();
 
@@ -19,35 +21,30 @@ app.use(express.json({ limit: '10mb' }));
 const openaiModel = process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna';
 
 // Official TypeSafe Jev System One Model API Caller (https://api.typesafe.ai/v1/systemone)
-async function callTypeSafeJevSystemOne(state: string, questions: JevQuestion[], apiKey: string) {
+async function callTypeSafeJevSystemOne(state: object, questions: JevQuestion[], apiKey: string) {
   const typesafeQuestions: Record<string, any> = {};
 
   for (const q of questions) {
     if (q.type === 'noul') {
       typesafeQuestions[q.id] = {
         type: 'noul',
-        instruction: q.instruction,
+        instructions: q.instruction,
         criteria: {
-          true: q.noulPrompt || q.instruction,
-          false: `非 ${q.noulPrompt || q.instruction}`,
+          true: q.noulPrompt,
+          false: q.noulFalsePrompt || 'The compared terms have different substantive meaning or one is missing.',
         },
       };
     } else if (q.type === 'choice') {
-      const criteria: Record<string, string> = {};
-      (q.choices || []).forEach((c) => {
-        criteria[c.id] = c.label;
-      });
       typesafeQuestions[q.id] = {
         type: 'choice',
-        instruction: q.instruction,
-        criteria: Object.keys(criteria).length > 0 ? criteria : { opt1: '是', opt2: '否' },
+        instructions: q.instruction,
+        criteria: Object.fromEntries((q.choices || []).map((choice) => [choice.id, choice.label])),
       };
-    } else if (q.type === 'score') {
-      const levels = (q.scoreLevels || []).map((l) => l.label);
+    } else {
       typesafeQuestions[q.id] = {
         type: 'score',
-        instruction: q.instruction,
-        criteria: levels.length >= 2 ? levels : ['1分 - 差', '3分 - 中', '5分 - 优'],
+        instructions: q.instruction,
+        criteria: (q.scoreLevels || []).map((level) => level.label),
       };
     }
   }
@@ -133,8 +130,8 @@ app.post('/api/compare', async (req, res) => {
     if (!textA || !textB) {
       return res.status(400).json({ error: 'Text A and Text B are both required.' });
     }
-    if (!config || !Array.isArray(config.questions) || config.questions.length === 0) {
-      return res.status(400).json({ error: 'At least one Jev question is required.' });
+    if (!isValidConsistencyConfig(config)) {
+      return res.status(400).json({ error: 'Invalid Jev consistency questions or scoring criteria.' });
     }
 
     const typesafeKey = process.env.TYPESAFE_API_KEY || process.env.JEV_API_KEY;
@@ -147,102 +144,21 @@ app.post('/api/compare', async (req, res) => {
     }
 
     console.log('Invoking official TypeSafe Jev API for contract comparison...');
-    const [resA, resB] = await Promise.all([
-      callTypeSafeJevSystemOne(textA, config.questions, typesafeKey),
-      callTypeSafeJevSystemOne(textB, config.questions, typesafeKey),
-    ]);
-    const jevResultsA = resA.results || resA;
-    const jevResultsB = resB.results || resB;
-    const isZh = lang !== 'en';
-
-    const items = config.questions.map((q) => {
-      const rawA = jevResultsA[q.id] || {};
-      const rawB = jevResultsB[q.id] || {};
-      const makeAnswer = (raw: any, title: string) => {
-        const answer: any = {
-          questionId: q.id,
-          questionTitle: q.title,
-          type: q.type,
-          confidence: Number(raw.confidence ?? 0),
-          reasoning: raw.reasoning || (isZh ? `${title} 的结论由 Jev 原生模型生成。` : `${title} was evaluated by the native Jev model.`),
-          evidenceQuotes: raw.evidenceQuotes || raw.evidence || [],
-        };
-        if (q.type === 'noul') {
-          const probability = Number(raw.probability ?? (raw.value ? 1 : 0));
-          answer.noulResult = { value: raw.value ?? probability > 0.5, probability };
-        } else if (q.type === 'choice') {
-          const selectedId = String(raw.value ?? raw.selected ?? raw.selectedId ?? '');
-          answer.choiceResult = {
-            selectedId,
-            selectedLabel: q.choices?.find((choice) => choice.id === selectedId)?.label || raw.selectedLabel || selectedId,
-            probabilities: raw.probabilities || (selectedId ? { [selectedId]: 1 } : {}),
-          };
-        } else {
-          const score = Number(raw.value ?? raw.score ?? q.minScore ?? 1);
-          const maxScore = q.maxScore || 5;
-          answer.scoreResult = { score, maxScore, normalizedPercent: Math.round((score / maxScore) * 100) };
-        }
-        return answer;
-      };
-      const answerA = makeAnswer(rawA, titleA);
-      const answerB = makeAnswer(rawB, titleB);
-      const comparableA = q.type === 'noul' ? answerA.noulResult.value : q.type === 'choice' ? answerA.choiceResult.selectedId : answerA.scoreResult.score;
-      const comparableB = q.type === 'noul' ? answerB.noulResult.value : q.type === 'choice' ? answerB.choiceResult.selectedId : answerB.scoreResult.score;
-      const identical = comparableA === comparableB;
-      return {
-        questionId: q.id,
-        answerA,
-        answerB,
-        verdict: identical ? 'identical' : 'diverged',
-        deltaSummary: identical
-          ? (isZh ? 'Jev 对两份合同给出了相同判定。' : 'Jev returned the same judgment for both contracts.')
-          : (isZh ? 'Jev 对两份合同给出了不同判定。' : 'Jev returned different judgments for the contracts.'),
-      };
-    });
-
-    const questionById = new Map(config.questions.map((question) => [question.id, question]));
-    const reviewAnswer = items.find((item) => {
-      const question = questionById.get(item.questionId);
-      return /review|审核|decision/i.test(`${item.questionId} ${question?.title || ''}`);
-    })?.answerB?.choiceResult?.selectedId;
-    const tamperingAnswers = items.filter((item) => {
-      const question = questionById.get(item.questionId);
-      return /tamper|篡改/i.test(`${item.questionId} ${question?.title || ''}`);
-    });
-    const tamperingCount = tamperingAnswers.filter((item) => item.answerB?.noulResult?.value === true).length;
-    const identicalCount = items.filter((item) => item.verdict === 'identical').length;
-    const consistencyRate = Math.round((identicalCount / items.length) * 1000) / 10;
-    // Only an explicit Jev workflow answer may auto-pass a contract. If the
-    // configured questions do not produce one, fail closed for human review.
-    const contractDecision = reviewAnswer === 'rejected'
-      ? 'rejected'
-      : reviewAnswer === 'auto_pass' && tamperingCount === 0
-        ? 'auto_pass'
-        : 'require_human_review';
-
+    const state = {
+      baseline: { title: titleA, text: textA },
+      scanned: { title: titleB, text: textB },
+      comparisonPolicy: config.systemInstruction,
+    };
+    const result = await callTypeSafeJevSystemOne(state, config.questions, typesafeKey);
+    const answers = result.answers;
+    const { consistencyRate, contractDecision } = calculateConsistency(config.questions, answers || {});
     return res.json({
-      summary: {
-        overallWinner: 'NEUTRAL',
-        scoreA: 100,
-        scoreB: consistencyRate,
-        contractDecision,
-        consistencyRate,
-        tamperingCount,
-        ocrNoiseCount: 0,
-        decisionReason: isZh
-          ? reviewAnswer
-            ? `Jev 工作流问题的原生结论为“${reviewAnswer}”。`
-            : '当前问题集未返回明确的 Jev 工作流结论，已按安全策略转人工复核。'
-          : reviewAnswer
-            ? `The native Jev workflow answer is "${reviewAnswer}".`
-            : 'The question set returned no explicit Jev workflow decision; the contract was routed to human review.',
-        keyFindings: items.filter((item) => item.verdict !== 'identical').map((item) => item.answerB.reasoning),
-        summaryText: isZh ? 'Jev 原生合同比对已完成。' : 'Native Jev contract comparison completed.',
-        engine: 'typesafe_jev_native',
-        endpoint: 'https://api.typesafe.ai/v1/systemone',
-      },
-      tamperingDetails: [],
-      items,
+      consistencyRate,
+      contractDecision,
+      evaluations: config.questions.map((question) => ({
+        question,
+        answer: answers[question.id] as JevRawAnswer,
+      })),
     });
   } catch (error: any) {
     console.error('Error during Jev comparison:', error);
@@ -265,160 +181,34 @@ app.post('/api/generate-questions', async (req, res) => {
     };
 
     const isZh = lang !== 'en';
-    const defaultDesc = isZh
-      ? '重点审查核心商务条款（金额、付款节点、违约金、免责上限），严格区分实质性篡改与良性OCR噪点，并给出审核流向决策。'
-      : 'Focus on auditing core commercial terms (amount, payment schedule, penalties, liability cap), rigorously distinguish substantive tampering from benign OCR noise, and output workflow routing decision.';
+    const fallback = createConsistencyConfig(isZh ? 'zh' : 'en');
+    const prompt = `Create exactly FOUR TypeSafe Jev questions for comparing TWO contracts in one structured state.
+User's audit focus: ${userDescription || topicHint || 'Core legal and commercial terms'}
+Baseline excerpt: ${textA.slice(0, 1000)}
+Scanned excerpt: ${textB.slice(0, 1000)}
 
-    const prompt = `
-You are a senior legal compliance and rubric engineer specializing in Contract Auditing and the TypeSafe Jev System One evaluation specification.
-The user has provided the following specific requirement / focus for the contract evaluation:
-"""
-${userDescription || topicHint || defaultDesc}
-"""
+The state fields are baseline.text, scanned.text, and comparisonPolicy. Keep the exact question IDs, types, Choice option IDs, consistentChoices, Score level order (0 through 4), invertForConsistency, and weights in the template below. Refine the wording for the user's focus without narrowing the overall contract comparison. For substantive_match, YES means all substantive terms match. For human_edit_signs, YES means observable signs of deliberate textual modification, not proof of who edited or why. The Choice must separate identical/formatting, harmless OCR, substantive change, and unrelated pages. The Score levels must run from unrelated or strongly changed to fully consistent. Ignore only OCR or formatting noise that cannot change meaning. Do not put the 90% threshold in a question; code computes the decision.
+Use ${isZh ? 'Chinese' : 'English'} for titles, instructions, and criteria. Return JSON only, without comments, using this structure:
+${JSON.stringify(fallback, null, 2)}`;
 
-${textA ? `Reference Original Contract Text A:\n"""\n${textA.slice(0, 1000)}\n"""` : ''}
-${textB ? `Reference Scanned/OCR Contract Text B:\n"""\n${textB.slice(0, 1000)}\n"""` : ''}
-
-### Task & Jev Specification:
-Generate a tailored system instruction and a set of 3 to 5 atomic Jev questions ('noul', 'choice', 'score') that directly address the user's description.
-1. **Noul Questions**: Yes/No boolean questions with calibrated probability (0.0 - 1.0). Must provide clear true/false meaning.
-2. **Choice Questions**: Categorical routing/classification with 2-4 mutually exclusive options (e.g. 审核流向决策: 自动通过 / 需人工Review).
-3. **Score Questions**: Numeric continuous ratings (e.g. 1 to 5) with descriptive levels.
-4. **Contract Audit Rule**: Ensure the questions and instructions strictly separate SUBSTANTIVE TAMPERING from BENIGN OCR NOISE.
-5. All titles, instructions, and labels MUST be in clear, professional ${isZh ? 'Chinese' : 'English'}.
-
-Return JSON ONLY with this exact structure:
-{
-  "systemInstruction": "Objective evaluator instruction tailored to user's requirements",
-  "questions": [
-    {
-      "id": "question_id_slug",
-      "title": "${isZh ? '简短指标标题' : 'Metric Title'}",
-      "type": "noul", // or "choice" or "score"
-      "instruction": "${isZh ? '针对该指标的具体评测指令' : 'Specific evaluation rubric instruction'}",
-      "noulPrompt": "${isZh ? 'Yes/No 判定语句' : 'Yes/No proposition'}",
-      "weight": 2.0
-    },
-    {
-      "id": "review_decision",
-      "title": "${isZh ? '审核流向决策' : 'Workflow Routing Decision'}",
-      "type": "choice",
-      "instruction": "${isZh ? '根据篡改风险决定处理流向' : 'Determine workflow routing according to risk'}",
-      "choices": [
-        { "id": "auto_pass", "label": "${isZh ? '🟢 自动通过 (仅含轻微OCR噪声，一致性极高)' : '🟢 Auto-Pass (Benign scan noise only)'}" },
-        { "id": "require_human_review", "label": "${isZh ? '🔴 需人工 Review (检出实质性条款篡改)' : '🔴 Require Human Review (Substantive tampering detected)'}" }
-      ],
-      "weight": 2.5
-    },
-    {
-      "id": "metric_score",
-      "title": "${isZh ? '评分指标标题' : 'Rating Metric Title'}",
-      "type": "score",
-      "instruction": "${isZh ? '评分指引' : 'Scoring guidance'}",
-      "minScore": 1,
-      "maxScore": 5,
-      "scoreLevels": [
-        { "score": 1, "label": "${isZh ? '1分 - 严重违规/大幅篡改' : '1 - Severe violation/tampering'}" },
-        { "score": 3, "label": "${isZh ? '3分 - 局部存疑需要核实' : '3 - Ambiguous points requiring verification'}" },
-        { "score": 5, "label": "${isZh ? '5分 - 完全合规/无实质改动' : '5 - Fully compliant/no alteration'}" }
-      ],
-      "weight": 1.5
-    }
-  ]
-}
-`;
-
-    let data: any = null;
+    let data: JevEvaluationConfig = fallback;
     try {
       const responseText = await generateOpenAIContent(
         prompt,
-        'You are an expert prompt engineer and contract compliance auditor specialized in TypeSafe Jev System One evaluation. Output pristine JSON only.'
+        'Write precise TypeSafe Jev Noul, Choice, and Score comparison questions. Return valid JSON only.'
       );
-      try {
-        data = JSON.parse(responseText.trim());
-      } catch {
-        const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        data = JSON.parse(cleaned);
+      const cleaned = responseText.trim().replace(/^```json\s*|^```\s*|\s*```$/g, '');
+      const parsed = JSON.parse(cleaned) as JevEvaluationConfig;
+      if (!isValidConsistencyConfig(parsed) || parsed.questions.length !== 4 ||
+          parsed.questions.some((question, index) => question.id !== fallback.questions[index].id ||
+            question.type !== fallback.questions[index].type) ||
+          parsed.questions[1].invertForConsistency !== true ||
+          parsed.questions[2].consistentChoices?.join(',') !== 'same,ocr') {
+        throw new Error('Generated questions did not match the consistency rubric.');
       }
-    } catch (fallbackErr: any) {
-      console.warn('All model attempts failed in generate-questions, returning tailored template:', fallbackErr?.message);
-      data = isZh
-        ? {
-            systemInstruction: '作为资深法务合规审计专家，请遵循 Jev 原子化评测标准，严格区分【实质性篡改】与【OCR识别噪声】。',
-            questions: [
-              {
-                id: 'has_substantive_tampering',
-                title: '是否存在实质性条款篡改？',
-                type: 'noul',
-                instruction: `根据用户诉求「${userDescription.slice(0, 30)}...」，审查是否存在金额、付款账期、违约金或责任限制等实质性篡改。`,
-                noulPrompt: '是否存在实质性法律或数值篡改？',
-                weight: 2.0,
-              },
-              {
-                id: 'review_decision',
-                title: '审核流向决策',
-                type: 'choice',
-                instruction: '评估两版文本差异，决定是否触发人工审核。',
-                choices: [
-                  { id: 'auto_pass', label: '🟢 自动通过 (仅含轻微OCR噪声，一致性极高)' },
-                  { id: 'require_human_review', label: '🔴 需人工 Review (检出实质性条款篡改)' },
-                ],
-                weight: 2.5,
-              },
-              {
-                id: 'ocr_noise_ratio',
-                title: '差异中良性 OCR 字符噪声占比',
-                type: 'score',
-                instruction: '评分扫描件中差异属于良性 OCR 字符识别噪点的比例。',
-                minScore: 1,
-                maxScore: 5,
-                scoreLevels: [
-                  { score: 1, label: '1分 - 主要是恶意篡改或实质变动' },
-                  { score: 3, label: '3分 - 既有错别字也有存疑改动' },
-                  { score: 5, label: '5分 - 全部为良性形近字识别噪点' },
-                ],
-                weight: 1.5,
-              },
-            ],
-          }
-        : {
-            systemInstruction: 'As a senior legal auditor, apply TypeSafe Jev standards to rigorously distinguish substantive tampering from benign OCR noise.',
-            questions: [
-              {
-                id: 'has_substantive_tampering',
-                title: 'Substantive Alterations Detected?',
-                type: 'noul',
-                instruction: `Evaluate based on "${userDescription.slice(0, 30)}..." whether consideration amounts, milestones, remedies, or liabilities were altered.`,
-                noulPrompt: 'Does the document contain unauthorized substantive legal or financial alterations?',
-                weight: 2.0,
-              },
-              {
-                id: 'review_decision',
-                title: 'Audit Workflow Routing',
-                type: 'choice',
-                instruction: 'Determine whether to route the contract to automated approval or manual human review.',
-                choices: [
-                  { id: 'auto_pass', label: '🟢 Auto-Pass Approved (Benign scan noise only, high consistency)' },
-                  { id: 'require_human_review', label: '🔴 Require Human Review (Substantive tampering detected)' },
-                ],
-                weight: 2.5,
-              },
-              {
-                id: 'ocr_noise_ratio',
-                title: 'Benign Scan Noise Ratio',
-                type: 'score',
-                instruction: 'Rate the proportion of detected differences that qualify as benign optical character scan artifacts.',
-                minScore: 1,
-                maxScore: 5,
-                scoreLevels: [
-                  { score: 1, label: '1 - Primarily substantive or malicious alterations' },
-                  { score: 3, label: '3 - Mixed ambiguous changes and typos' },
-                  { score: 5, label: '5 - Exclusively benign optical scan noise' },
-                ],
-                weight: 1.5,
-              },
-            ],
-          };
+      data = parsed;
+    } catch (generationError: any) {
+      console.warn('Question generation failed; using the default consistency rubric:', generationError?.message);
     }
 
     return res.json(data);

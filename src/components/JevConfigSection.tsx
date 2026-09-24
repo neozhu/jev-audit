@@ -4,6 +4,7 @@ import {
   JevQuestion,
 } from '../types/jev';
 import { JevQuestionModal } from './JevQuestionModal';
+import { isValidConsistencyConfig } from '../utils/consistency';
 import { AiGenerateQuestionsModal } from './AiGenerateQuestionsModal';
 import { useI18n } from '../i18n/context';
 import {
@@ -82,8 +83,8 @@ export const JevConfigSection: React.FC<Props> = ({
   const handleSaveJson = () => {
     try {
       const parsed = JSON.parse(rawJsonText);
-      if (!parsed || !Array.isArray(parsed.questions)) {
-        throw new Error(lang === 'zh' ? '根对象必须包含 questions 数组' : 'Root object must contain a questions array');
+      if (!isValidConsistencyConfig(parsed)) {
+        throw new Error(lang === 'zh' ? '问题类型、选项或计分配置无效' : 'Invalid question types, options, or scoring configuration');
       }
       onChangeConfig({
         systemInstruction: parsed.systemInstruction || '',
@@ -242,7 +243,7 @@ export const JevConfigSection: React.FC<Props> = ({
 
                 {q.type === 'score' && (
                   <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded inline-block">
-                    {t.rubric.scoreRange}: {q.minScore || 1} ~ {q.maxScore || 5}
+                    {t.rubric.scoreRange}: {q.minScore ?? 0} ~ {q.maxScore ?? ((q.scoreLevels?.length ?? 1) - 1)}
                     {q.scoreLevels && q.scoreLevels.length > 0 && (
                       <span className="ml-1 text-slate-400">
                         ({q.scoreLevels.map((l) => `${l.score}:${l.label}`).join(' | ')})
@@ -296,7 +297,7 @@ export const JevConfigSection: React.FC<Props> = ({
               onChangeConfig({
                 ...config,
                 systemInstruction: systemInstruction || config.systemInstruction,
-                questions: [...config.questions, ...newQuestions],
+                questions: [...config.questions.filter((q) => !newQuestions.some((newQ) => newQ.id === q.id)), ...newQuestions],
               });
             } else {
               onChangeConfig({

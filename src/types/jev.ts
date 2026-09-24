@@ -18,11 +18,14 @@ export interface JevQuestion {
   type: JevQuestionType;
   instruction: string;
   noulPrompt?: string;
+  noulFalsePrompt?: string;
   choices?: JevChoiceOption[];
   minScore?: number;
   maxScore?: number;
   scoreLevels?: JevScoreLevel[];
   weight?: number;
+  invertForConsistency?: boolean;
+  consistentChoices?: string[];
 }
 
 export interface JevEvaluationConfig {
@@ -71,6 +74,22 @@ export interface JevComparisonItem {
 }
 
 export type ContractDecision = 'auto_pass' | 'require_human_review' | 'rejected';
+
+export interface ConsistencyResult {
+  consistencyRate: number;
+  contractDecision: 'auto_pass' | 'require_human_review';
+  evaluations: JevQuestionEvaluation[];
+}
+
+export type JevRawAnswer =
+  | { type: 'noul'; noul: number }
+  | { type: 'choice'; choice: string; probabilities: Record<string, number>; confidence: number }
+  | { type: 'score'; score: number; probabilities: Record<string, number>; confidence: number };
+
+export interface JevQuestionEvaluation {
+  question: JevQuestion;
+  answer: JevRawAnswer;
+}
 
 export interface TamperingDetail {
   id: string;

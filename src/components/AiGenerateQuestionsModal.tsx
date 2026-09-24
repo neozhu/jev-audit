@@ -23,38 +23,38 @@ interface Props {
 const PRESET_IDEAS_ZH = [
   {
     title: '💰 款项与账期防篡改',
-    prompt: '请重点审查合同中的设备采购总额、首付款比例以及付款账期。如果扫描件中金额少了零、改动了账期天数或支付前置条件，必须判定为需人工 Review；若仅是 OCR 错别字则放行。',
+    prompt: '请重点比较两份合同的设备采购总额、首付款比例以及付款账期，保留 Noul、Choice、Score 三种评测类型。',
   },
   {
     title: '⚖️ 违约金与解约条款',
-    prompt: '请重点审查违约金计算比例（千分之几还是万分之几）、单方解约通知期（是否从30天缩短到7天）以及免责上限是否被删除，要求建立明确分类和评分规则。',
+    prompt: '请重点比较违约金比例、解约通知期和免责上限是否保持相同的实质含义。',
   },
   {
     title: '🛡️ 知识产权与保密责任',
-    prompt: '审查知识产权归属是否从【甲方完全所有】被暗改为【双方共有】或【乙方所有】，以及保密期限是否被篡改。必须高敏感度报警。',
+    prompt: '请分别比较两份合同的知识产权归属和保密期限是否一致。',
   },
   {
     title: '🔍 扫描件 OCR 噪声容忍',
-    prompt: '这批合同主要经过手机拍照扫描，包含大量形近字（如日/目、已/己、同/间）以及下划线断裂。请重点判定这些是否仅属于良性 OCR 噪点，在核心条款一致时高置信度自动通过。',
+    prompt: '这批合同包含形近字和排版噪声。比较核心条款的实质含义，忽略不改变含义的 OCR 错字。',
   },
 ];
 
 const PRESET_IDEAS_EN = [
   {
     title: '💰 Payment Terms & Financial Integrity',
-    prompt: 'Strictly inspect total purchase amount, deposit percentages, and payment milestones. Flag any altered figures, omitted zeros, or modified deadlines as requiring manual review; benign OCR typos can pass.',
+    prompt: 'Compare total amount, deposit percentages, and payment milestones while keeping Noul, Choice, and Score evaluations.',
   },
   {
     title: '⚖️ Penalties & Termination Clauses',
-    prompt: 'Check liquidated damages rates (0.5% vs 0.05%), unilateral termination notice periods, and liability caps. Establish clear classification and scoring rules.',
+    prompt: 'Compare liquidated damages rates, termination notice periods, and liability caps for substantive agreement.',
   },
   {
     title: '🛡️ IP Ownership & Confidentiality',
-    prompt: 'Audit intellectual property ownership rights (exclusive vs shared/retained) and confidentiality durations. Must alert on subtle alterations.',
+    prompt: 'Compare intellectual property ownership and confidentiality durations between the two contracts.',
   },
   {
     title: '🔍 Benign OCR Noise Tolerance',
-    prompt: 'These documents were scanned from paper and contain optical character confusion (1O vs 10, hyphens, broken underlines). Verify that benign typographical artifacts are tolerated with high auto-pass confidence when core terms match.',
+    prompt: 'These documents contain OCR character confusion and formatting artifacts. Compare substantive terms while ignoring only immaterial scan noise.',
   },
 ];
 
@@ -72,8 +72,8 @@ export const AiGenerateQuestionsModal: React.FC<Props> = ({
 
   const [userDescription, setUserDescription] = useState(
     isZh
-      ? '请重点审查合同核心商务条款：包括采购总金额、付款方式、违约责任与免责限制。严格区分恶意篡改与良性 OCR 噪点，并给出审核流向决策。'
-      : 'Strictly review key commercial terms: total price, payment schedule, default liabilities, and liability caps. Distinguish malicious alterations from benign OCR scan noise.'
+      ? '请分别比较两份合同的采购总金额、付款方式、违约责任与免责限制是否一致，忽略无实质影响的 OCR 噪声。'
+      : 'Compare total price, payment schedule, liabilities, and liability caps between the two contracts, ignoring immaterial OCR noise.'
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -14,6 +14,89 @@ export interface PresetScenario {
   config: JevEvaluationConfig;
 }
 
+export const createConsistencyConfig = (lang: Language): JevEvaluationConfig => {
+  const isZh = lang === 'zh';
+  return {
+    systemInstruction: isZh
+      ? '比较 baseline.text 与 scanned.text 的法律及商业含义。只忽略不改变含义的 OCR 错字和排版差异；不得忽略金额、日期、主体、权责或条款的增删变化。只判断可观察到的文本差异，不推断修改人或动机。'
+      : 'Compare the legal and commercial meaning of baseline.text and scanned.text. Ignore only OCR and formatting noise that cannot change meaning. Do not ignore changed amounts, dates, parties, rights, duties, or missing clauses. Judge observable textual differences without inferring who made them or why.',
+    questions: [
+      {
+        id: 'substantive_match',
+        title: isZh ? '实质条款一致' : 'Substantive terms match',
+        type: 'noul',
+        instruction: isZh
+          ? '忽略不改变含义的 OCR 和排版差异后，`baseline.text` 与 `scanned.text` 中的合同条款是否具有相同的法律和商业含义？'
+          : 'Ignoring OCR and formatting differences that do not change meaning, do the terms in `baseline.text` and `scanned.text` have the same legal and commercial meaning?',
+        noulPrompt: isZh ? '所有实质条款相同' : 'All substantive terms match',
+        noulFalsePrompt: isZh ? '至少一项实质条款被改变、增加或删去' : 'At least one substantive term changed, was added, or was removed',
+        weight: 1,
+      },
+      {
+        id: 'human_edit_signs',
+        title: isZh ? '疑似人为修改迹象' : 'Signs of deliberate editing',
+        type: 'noul',
+        instruction: isZh
+          ? '与 `baseline.text` 相比，`scanned.text` 是否出现疑似人为修改的文本迹象：实质条款被新增、删除或替换，且不能合理解释为无害 OCR 错字或排版差异？只判断可观察迹象，不推断修改人或动机。'
+          : 'Compared with `baseline.text`, does `scanned.text` show signs of deliberate editing: substantive terms added, removed, or replaced in a way that harmless OCR or formatting differences cannot explain? Judge observable signs only, not the editor or motive.',
+        noulPrompt: isZh ? '存在不能用 OCR 噪声解释的实质修改迹象' : 'There are substantive edit signs that OCR noise cannot explain',
+        noulFalsePrompt: isZh ? '不存在此类迹象' : 'There are no such signs',
+        invertForConsistency: true,
+        weight: 1,
+      },
+      {
+        id: 'difference_type',
+        title: isZh ? '差异类别' : 'Difference type',
+        type: 'choice',
+        instruction: isZh
+          ? '`scanned.text` 与 `baseline.text` 的差异最符合哪一类？'
+          : 'Which category best describes the differences between `scanned.text` and `baseline.text`?',
+        choices: isZh
+          ? [
+              { id: 'same', label: '文本相同或仅有不影响含义的排版差异' },
+              { id: 'ocr', label: '存在 OCR 错字，但法律和商业含义没有变化' },
+              { id: 'changed', label: '至少一项实质条款被改变、增加或删去' },
+              { id: 'unrelated', label: '两段文本明显不对应，无法逐项比较' },
+            ]
+          : [
+              { id: 'same', label: 'Same text or only immaterial formatting differences' },
+              { id: 'ocr', label: 'OCR errors with no legal or commercial change' },
+              { id: 'changed', label: 'At least one substantive term changed, was added, or was removed' },
+              { id: 'unrelated', label: 'The texts are not corresponding content' },
+            ],
+        consistentChoices: ['same', 'ocr'],
+        weight: 1,
+      },
+      {
+        id: 'consistency_degree',
+        title: isZh ? '实质一致程度' : 'Degree of substantive consistency',
+        type: 'score',
+        instruction: isZh
+          ? '忽略无害 OCR 噪声后，`scanned.text` 相对 `baseline.text` 的实质一致程度如何？'
+          : 'Ignoring harmless OCR noise, how substantively consistent is `scanned.text` with `baseline.text`?',
+        minScore: 0,
+        maxScore: 4,
+        scoreLevels: isZh
+          ? [
+              { score: 0, label: '内容不对应或核心条款完全不同' },
+              { score: 1, label: '多处重要条款发生实质变化' },
+              { score: 2, label: '至少一处重要条款发生变化或缺失' },
+              { score: 3, label: '实质条款基本一致，但局部仍有不确定性' },
+              { score: 4, label: '所有实质条款一致，差异仅为无害 OCR 或排版噪声' },
+            ]
+          : [
+              { score: 0, label: 'Content is unrelated or core terms are entirely different' },
+              { score: 1, label: 'Several important terms have substantive changes' },
+              { score: 2, label: 'At least one important term changed or is missing' },
+              { score: 3, label: 'Terms mostly match but some points remain uncertain' },
+              { score: 4, label: 'All substantive terms match; differences are harmless OCR or formatting noise' },
+            ],
+        weight: 1,
+      },
+    ],
+  };
+};
+
 export const CONTRACT_PRESETS_ZH: PresetScenario[] = [
   {
     id: 'case_tampered_amount',
@@ -51,57 +134,7 @@ export const CONTRACT_PRESETS_ZH: PresetScenario[] = [
 第三条 违约责任与争议解决
 3.1 任何一方逾期履行付款或交付义务的，每逾期一日，应按照未履行业务金额的万分之五（0.05%）向守约方支付违约金。
 3.2 因本合同引起的任何争议，双方应友好协商；协商不成的，应向乙方所在地有管辖权的人民法院提起诉讼。`,
-    config: {
-      systemInstruction: `作为资深法务合规审计与合同风控专家，请严格遵循 Jev 原子化评测标准，对比原始基准合同与扫描件 OCR 识别文本。
-首要任务是严密甄别差异的性质：
-1. 坚决区分【实质性篡改】（如改动金额数字、交付期限、违约金比例、管辖法院、单方责任排除等）与【OCR识别噪声】（如形近字'日/目'、'己/已'、多余空格换行、全半角标点）。
-2. 若存在任何实质性篡改或法律权责重大变更，审查结论必须判定为【需人工Review】并列举疑点。
-3. 若无实质性篡改且文本一致率 >= 85%，差异全部属于无实质法律影响的 OCR 字符瑕疵，判定为【自动通过】。`,
-      questions: [
-        {
-          id: 'has_substantive_tampering',
-          title: '是否存在实质性条款篡改？ (Substantive Tampering)',
-          type: 'noul',
-          instruction: '判断 OCR 文本中是否包含对金额、账号、交付时限、违约责任比例或管辖法院等关键法律实质条款的主观恶意或重大篡改。如仅仅为轻微OCR错别字（如日变目、标点符号），则判定为 false。',
-          noulPrompt: '是否存在实质性法律/数值/权责篡改？',
-          weight: 2.0,
-        },
-        {
-          id: 'review_decision',
-          title: '审核流向决策 (Audit Action Decision)',
-          type: 'choice',
-          instruction: '根据篡改与噪声识别结果给出自动化工作流决策：若无实质性差异仅有OCR噪声且一致率达标则 auto_pass；若检测出任何实质性金额或条款篡改则 require_human_review。',
-          choices: [
-            { id: 'auto_pass', label: '🟢 自动通过 (仅含轻微OCR噪声，一致性极高)' },
-            { id: 'require_human_review', label: '🔴 需人工 Review (检出金额/权责实质篡改，必须人工介入)' },
-            { id: 'rejected', label: '⛔ 建议直接驳回 (多处核心条款严重恶意篡改)' },
-          ],
-          weight: 2.5,
-        },
-        {
-          id: 'amount_and_number_integrity',
-          title: '核心金额与关键数值完整性',
-          type: 'noul',
-          instruction: '检查两份文本中所有的金额数字、百分比、日期、银行账号是否 100% 绝对一致无变更。',
-          noulPrompt: '所有金额与数值是否绝对吻合？',
-          weight: 1.8,
-        },
-        {
-          id: 'ocr_noise_ratio',
-          title: '差异中 OCR 字符识别噪声占比',
-          type: 'score',
-          instruction: '评估两份文本的所有差异点中，有多少比例属于OCR识别引擎造成的错别字、标点瑕疵或空格错位（5分表示差异基本全是良性OCR噪音，1分表示差异主要为恶意实质性修改）。',
-          minScore: 1,
-          maxScore: 5,
-          scoreLevels: [
-            { score: 1, label: '1分 - 几乎全是实质性篡改，无良性噪声' },
-            { score: 3, label: '3分 - 篡改与OCR噪声混杂并存' },
-            { score: 5, label: '5分 - 差异全部属于纯OCR字符噪声，不影响法律效力' },
-          ],
-          weight: 1.2,
-        },
-      ],
-    },
+    config: createConsistencyConfig('zh'),
   },
   {
     id: 'case_pure_ocr_noise',
@@ -143,43 +176,7 @@ export const CONTRACT_PRESETS_ZH: PresetScenario[] = [
 
 第三条 知识产权归属
 培训过程中由乙方编制的基础讲义知识产权归乙方所有；甲方定制开发的数据集与业务模型知识产权归甲方独家所有。`,
-    config: {
-      systemInstruction: `作为法务合同审查引擎，请核验扫描识别件是否存在实质篡改。识别并区分良性 OCR 字符噪声（如“合间/合同”、“目/日”、括号全半角空格）与法律实质篡改。如若无实质权利变更且文本一致率 >= 85%，判定为【自动通过】。`,
-      questions: [
-        {
-          id: 'has_substantive_tampering',
-          title: '是否存在实质性条款篡改？ (Substantive Tampering)',
-          type: 'noul',
-          instruction: '判断是否有任何条款、金额、权利义务被篡改。仅有形近字（合间/合同、目/日、全半角空格）视为无篡改 (false)。',
-          noulPrompt: '是否存在实质性篡改？',
-          weight: 2.0,
-        },
-        {
-          id: 'review_decision',
-          title: '审核流向决策 (Audit Action Decision)',
-          type: 'choice',
-          instruction: '决策流向：无实质篡改且属于纯OCR噪声则返回 auto_pass；有实质变动则 require_human_review。',
-          choices: [
-            { id: 'auto_pass', label: '🟢 自动通过 (仅含轻微OCR噪声，一致性极高)' },
-            { id: 'require_human_review', label: '🔴 需人工 Review (检出实质篡改)' },
-          ],
-          weight: 2.5,
-        },
-        {
-          id: 'ocr_noise_ratio',
-          title: 'OCR 噪声良性程度',
-          type: 'score',
-          instruction: '差异是否全部为 OCR 扫描噪点。5分表示完全为字符形近噪声，对合同法律效力与权利义务零实质影响。',
-          minScore: 1,
-          maxScore: 5,
-          scoreLevels: [
-            { score: 1, label: '1分 - 存在严重篡改' },
-            { score: 5, label: '5分 - 纯OCR噪点，无任何法律实质影响' },
-          ],
-          weight: 1.5,
-        },
-      ],
-    },
+    config: createConsistencyConfig('zh'),
   },
   {
     id: 'case_liability_clause_deleted',
@@ -207,31 +204,7 @@ export const CONTRACT_PRESETS_ZH: PresetScenario[] = [
 第五条 责任限制与解除合同
 5.1 乙方因本协议承担的全部赔偿责任上限不设限制。
 5.2 双方若遇履行困难应优先继续协商推进，任一方均不得单方面解除本合同。`,
-    config: {
-      systemInstruction: `作为资深法务合规审计专家，重点核对免责条款、赔偿上限以及解除权是否被暗中单方改动。发现任何免责变动或解除权被剥夺，必须标记为实质性篡改并要求人工 Review。`,
-      questions: [
-        {
-          id: 'has_substantive_tampering',
-          title: '是否存在实质性条款篡改？ (Substantive Tampering)',
-          type: 'noul',
-          instruction: '是否删改了免责上限（50%改无限）、取消了甲方单方解除权？若是，则属于实质性篡改 (true)。',
-          noulPrompt: '是否存在免责或解除权实质篡改？',
-          weight: 2.0,
-        },
-        {
-          id: 'review_decision',
-          title: '审核流向决策 (Audit Action Decision)',
-          type: 'choice',
-          instruction: '针对核心责任条款改动给出处理建议。',
-          choices: [
-            { id: 'auto_pass', label: '🟢 自动通过 (仅OCR噪声)' },
-            { id: 'require_human_review', label: '🔴 需人工 Review (免责/责任条款被单方篡改)' },
-            { id: 'rejected', label: '⛔ 建议直接驳回' },
-          ],
-          weight: 2.5,
-        },
-      ],
-    },
+    config: createConsistencyConfig('zh'),
   },
 ];
 
@@ -272,59 +245,7 @@ Section 2. Delivery Schedule and Location
 Section 3. Default Liabilities and Dispute Resolution
 3.1 In the event of overdue payment or delivery, the defaulting party shall pay liquidated damages equal to 0.05% of the delayed sum per day.
 3.2 Any dispute arising from this Agreement shall be subject to the exclusive jurisdiction of the state and federal courts located in Wilmington, Delaware.`,
-    config: {
-      systemInstruction: `As a senior legal compliance and contract risk auditor, evaluate the original baseline draft against the OCR scanned text following Jev atomic standards.
-Your top priority is distinguishing:
-1. Substantive tampering (alterations to monetary amounts, payment schedule, liquidated damages rate, jurisdiction, unilateral termination rights).
-2. Benign OCR noise (optical character confusion like '1O' vs '10', punctuation, spaces, hyphenation).
-Policy:
-- If ANY substantive tampering is found: require_human_review.
-- If no substantive tampering and consistency >= 85%: auto_pass.`,
-      questions: [
-        {
-          id: 'has_substantive_tampering',
-          title: 'Is there substantive clause tampering? (Substantive Tampering)',
-          type: 'noul',
-          instruction: 'Determine whether the scanned copy contains substantive alterations to price, payment milestones, penalties, or jurisdiction. Benign optical typos alone evaluate to false.',
-          noulPrompt: 'Does substantive legal/financial tampering exist?',
-          weight: 2.0,
-        },
-        {
-          id: 'review_decision',
-          title: 'Audit Workflow Routing Decision',
-          type: 'choice',
-          instruction: 'Workflow decision based on tampering vs noise: auto_pass if benign OCR noise only & consistency >= 85%; require_human_review if substantive alteration detected.',
-          choices: [
-            { id: 'auto_pass', label: '🟢 Auto Pass (Benign OCR noise only, consistency >= 85%)' },
-            { id: 'require_human_review', label: '🔴 Require Human Review (Substantive tampering detected)' },
-            { id: 'rejected', label: '⛔ Direct Rejection (Severe fraudulent modifications)' },
-          ],
-          weight: 2.5,
-        },
-        {
-          id: 'amount_and_number_integrity',
-          title: 'Monetary Amounts & Numerical Integrity',
-          type: 'noul',
-          instruction: 'Verify whether all monetary sums, percentages, dates, and account details match 100% between drafts.',
-          noulPrompt: 'Are all monetary amounts and numbers 100% identical?',
-          weight: 1.8,
-        },
-        {
-          id: 'ocr_noise_ratio',
-          title: 'Proportion of Benign OCR Noise',
-          type: 'score',
-          instruction: 'Rate how much of the detected differences are purely benign optical recognition noise (5 = pure OCR artifacts with zero legal effect; 1 = primarily malicious tampering).',
-          minScore: 1,
-          maxScore: 5,
-          scoreLevels: [
-            { score: 1, label: '1 - Primarily malicious tampering' },
-            { score: 3, label: '3 - Mixed tampering and OCR noise' },
-            { score: 5, label: '5 - Completely benign OCR optical noise' },
-          ],
-          weight: 1.2,
-        },
-      ],
-    },
+    config: createConsistencyConfig('en'),
   },
   {
     id: 'case_pure_ocr_noise',
@@ -366,43 +287,7 @@ Clause 2. Fees and Payment Schedule
 
 Clause 3. Intellectual Property Ownership
 Pre-existing courseware belongs to Party B; customized models and datasets developed specifically for Party A shall be the exclusive property of Party A.`,
-    config: {
-      systemInstruction: `As a legal contract auditor, inspect whether the scanned OCR draft contains substantive alterations. Distinguish benign optical noise ('Agreenent/Agreement', 'buslness/business', extra spacing) from legal modifications. If no substantive change and consistency >= 85%, assign auto_pass.`,
-      questions: [
-        {
-          id: 'has_substantive_tampering',
-          title: 'Is there substantive clause tampering? (Substantive Tampering)',
-          type: 'noul',
-          instruction: 'Check if any business terms, amounts, or rights are modified. Typographical scan noise evaluates to false.',
-          noulPrompt: 'Is there substantive clause tampering?',
-          weight: 2.0,
-        },
-        {
-          id: 'review_decision',
-          title: 'Audit Workflow Routing Decision',
-          type: 'choice',
-          instruction: 'Routing decision: return auto_pass if benign noise only and consistency >= 85%; return require_human_review if substantive alteration detected.',
-          choices: [
-            { id: 'auto_pass', label: '🟢 Auto Pass (Benign noise only, consistency >= 85%)' },
-            { id: 'require_human_review', label: '🔴 Require Human Review (Substantive tampering detected)' },
-          ],
-          weight: 2.5,
-        },
-        {
-          id: 'ocr_noise_ratio',
-          title: 'Benign Character Noise Degree',
-          type: 'score',
-          instruction: 'Are differences purely optical character scan noise? 5 = completely optical noise with zero legal impact.',
-          minScore: 1,
-          maxScore: 5,
-          scoreLevels: [
-            { score: 1, label: '1 - Severe tampering present' },
-            { score: 5, label: '5 - Pure OCR noise, zero legal impact' },
-          ],
-          weight: 1.5,
-        },
-      ],
-    },
+    config: createConsistencyConfig('en'),
   },
 ];
 

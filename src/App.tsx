@@ -4,9 +4,8 @@ import { TextInputSection } from './components/TextInputSection';
 import { JevConfigSection } from './components/JevConfigSection';
 import { ExecuteBar } from './components/ExecuteBar';
 import { ResultsSection } from './components/ResultsSection';
-import { getContractPresets, PresetScenario } from './data/presets';
-import { JevEvaluationConfig, ComparisonReport } from './types/jev';
-import { computeWordDiff } from './utils/diff';
+import { getContractPresets, createConsistencyConfig, PresetScenario } from './data/presets';
+import { JevEvaluationConfig, ConsistencyResult } from './types/jev';
 import { useI18n } from './i18n/context';
 
 export default function App() {
@@ -22,7 +21,7 @@ export default function App() {
   const [textB, setTextB] = useState<string>(initialPreset.textB);
   const [config, setConfig] = useState<JevEvaluationConfig>(initialPreset.config);
 
-  const [report, setReport] = useState<ComparisonReport | null>(null);
+  const [report, setReport] = useState<ConsistencyResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -62,12 +61,7 @@ export default function App() {
     setTextA('');
     setTitleB(isZh ? '回传扫描件 (OCR文本)' : 'Executed Scanned Copy (OCR Text)');
     setTextB('');
-    setConfig({
-      systemInstruction: isZh
-        ? '作为资深法务合规审计专家，请遵循 Jev 原子化评测标准，严格区分【实质性篡改】与【OCR识别噪声】。'
-        : 'As a senior legal auditor, apply TypeSafe Jev standards to rigorously distinguish substantive tampering from benign OCR noise.',
-      questions: [],
-    });
+    setConfig(createConsistencyConfig(lang));
     setReport(null);
     setError(null);
   };
@@ -99,23 +93,23 @@ export default function App() {
       setError(null);
       setLoadingStep(
         isZh
-          ? '1/3 正在解耦比对合同状态与排版...'
-          : '1/3 Decoupling contract states and layout...'
+            ? '1/3 正在准备两份合同的比较状态...'
+            : '1/3 Preparing the comparison state...'
       );
 
       const timer1 = setTimeout(() => {
         setLoadingStep(
           isZh
-            ? '2/3 正在执行 Jev 判别：甄别实质性条款篡改与 OCR 扫描噪声...'
-            : '2/3 Running Jev discrimination: Substantive alterations vs OCR noise...'
+              ? '2/3 Jev 正在逐项判断实质含义是否一致...'
+              : '2/3 Jev is evaluating substantive agreement...'
         );
       }, 700);
 
       const timer2 = setTimeout(() => {
         setLoadingStep(
           isZh
-            ? '3/3 计算条款一致性、合规风险等级与审查结论...'
-            : '3/3 Calculating consistency rate, legal risk levels, and audit verdict...'
+              ? '3/3 正在计算一致性得分与审核流向...'
+              : '3/3 Calculating consistency score and review decision...'
         );
       }, 2000);
 
@@ -141,74 +135,11 @@ export default function App() {
       }
 
       const data = await response.json();
-
-      // Pair returned items with question definitions
-      const pairedItems = (data.items || []).map((item: any) => {
-        const matchingQuestion = config.questions.find((q) => q.id === item.questionId) || {
-          id: item.questionId,
-          title: item.answerA?.questionTitle || item.questionId,
-          type: item.answerA?.type || 'score',
-          instruction: '',
-        };
-        return {
-          question: matchingQuestion,
-          answerA: item.answerA,
-          answerB: item.answerB,
-          verdict: item.verdict || 'identical',
-          deltaSummary: item.deltaSummary || '',
-          scoreDelta: item.scoreDelta,
-        };
-      });
-
-      const wordDiffs = computeWordDiff(textA, textB);
-
-      // Determine contract decision
-      const tamperingDetails = data.tamperingDetails || [];
-      const tamperingCount = data.summary?.tamperingCount ?? tamperingDetails.filter((d: any) => d.type === 'tampering').length;
-      const ocrNoiseCount = data.summary?.ocrNoiseCount ?? tamperingDetails.filter((d: any) => d.type === 'ocr_noise').length;
-
-      let contractDecision = data.summary?.contractDecision;
-      if (!contractDecision) {
-        contractDecision = tamperingCount > 0 ? 'require_human_review' : 'auto_pass';
+      if (!Number.isFinite(data.consistencyRate) || !['auto_pass', 'require_human_review'].includes(data.contractDecision) ||
+          !Array.isArray(data.evaluations) || data.evaluations.length !== config.questions.length) {
+        throw new Error(isZh ? 'Jev 未返回有效的一致性结果。' : 'Jev did not return a valid consistency result.');
       }
-
-      const completedReport: ComparisonReport = {
-        id: `audit_${Date.now()}`,
-        timestamp: new Date().toLocaleString(isZh ? 'zh-CN' : 'en-US', { hour12: false }),
-        titleA,
-        titleB,
-        textA,
-        textB,
-        config,
-        summary: {
-          overallWinner: data.summary?.overallWinner || 'NEUTRAL',
-          scoreA: data.summary?.scoreA ?? 100,
-          scoreB: data.summary?.scoreB ?? (tamperingCount > 0 ? 60 : 98),
-          keyFindings: data.summary?.keyFindings || [],
-          summaryText: data.summary?.summaryText || (isZh ? '合同审查完毕。' : 'Contract audit completed.'),
-          totalQuestions: config.questions.length,
-          identicalCount: pairedItems.filter((i: any) => i.verdict === 'identical').length,
-          divergedCount: pairedItems.filter((i: any) => i.verdict !== 'identical').length,
-          contractDecision,
-          consistencyRate: data.summary?.consistencyRate ?? (tamperingCount > 0 ? 89 : 99),
-          tamperingCount,
-          ocrNoiseCount,
-          decisionReason: data.summary?.decisionReason || (
-            contractDecision === 'auto_pass'
-              ? (isZh
-                  ? '合同核心条款与标的绝对吻合，差异全部属于 OCR 良性扫描噪点，已准予自动通过。'
-                  : 'Contract core terms match 100%. Differences are benign OCR noise. Auto-Pass approved.')
-              : (isZh
-                  ? `检出 ${tamperingCount} 处实质性条款篡改，存在法律与违约履约风险，必须触发人工 Review！`
-                  : `Detected ${tamperingCount} substantive alterations with legal and compliance exposure. Manual Review required!`)
-          ),
-        },
-        items: pairedItems,
-        diffs: wordDiffs,
-        tamperingDetails,
-      };
-
-      setReport(completedReport);
+      setReport(data as ConsistencyResult);
 
       // Smooth scroll to results
       setTimeout(() => {
@@ -233,20 +164,20 @@ export default function App() {
         {/* Section 1: Two Text Input Boxes */}
         <TextInputSection
           titleA={titleA}
-          setTitleA={setTitleA}
+          setTitleA={(value) => { setTitleA(value); setReport(null); }}
           textA={textA}
-          setTextA={setTextA}
+          setTextA={(value) => { setTextA(value); setReport(null); }}
           titleB={titleB}
-          setTitleB={setTitleB}
+          setTitleB={(value) => { setTitleB(value); setReport(null); }}
           textB={textB}
-          setTextB={setTextB}
+          setTextB={(value) => { setTextB(value); setReport(null); }}
           onSwap={handleSwap}
         />
 
         {/* Section 2: Jev Questions & Instructions Maintenance */}
         <JevConfigSection
           config={config}
-          onChangeConfig={setConfig}
+          onChangeConfig={(value) => { setConfig(value); setReport(null); }}
           textA={textA}
           textB={textB}
         />
