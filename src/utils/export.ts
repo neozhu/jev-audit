@@ -8,10 +8,10 @@ export function generateMarkdownReport(report: ComparisonReport, lang: Language 
   const isAutoPass = summary.contractDecision === 'auto_pass';
 
   const decisionBadge = isAutoPass
-    ? (isZh ? '🟢 【自动通过】(一致性极高，仅含良性OCR字符噪声)' : '🟢 [Auto-Pass Approved] (High consistency, benign OCR noise only)')
+    ? (isZh ? '🟢 【Jev 判定：自动通过】' : '🟢 [Jev Decision: Auto-Pass]')
     : summary.contractDecision === 'require_human_review'
-    ? (isZh ? '🔴 【需人工 Review】(检测到实质性条款/金额篡改风险)' : '🔴 [Manual Review Required] (Substantive clause/price alteration detected)')
-    : (isZh ? '⛔ 【建议直接驳回】(多项核心条款严重恶意篡改)' : '⛔ [Direct Rejection Recommended] (Severe substantive tampering)');
+    ? (isZh ? '🔴 【Jev 判定：需人工 Review】' : '🔴 [Jev Decision: Manual Review Required]')
+    : (isZh ? '⛔ 【Jev 判定：驳回】' : '⛔ [Jev Decision: Rejected]');
 
   let md = `# ${isZh ? '合同比对与篡改审查报告 (Contract Audit & Tampering Report)' : 'Contract Comparison & Anti-Tampering Audit Report'}
 *${isZh ? '审查生成时间' : 'Generated'}: ${timestamp}*
@@ -22,9 +22,7 @@ export function generateMarkdownReport(report: ComparisonReport, lang: Language 
 - **${isZh ? '审查决策建议' : 'Audit Recommendation'}**: **${decisionBadge}**
 - **${isZh ? '基准底稿合同' : 'Baseline Contract'}**: ${titleA}
 - **${isZh ? '回传扫描/OCR件' : 'Scanned Copy (OCR)'}**: ${titleB}
-- **${isZh ? '文本综合一致率' : 'Overall Consistency Rate'}**: **${summary.consistencyRate || 95}%**
-- **${isZh ? '实质性篡改检出' : 'Substantive Tampering'}**: **${summary.tamperingCount || 0} ${isZh ? '处' : 'items'}**
-- **${isZh ? '良性 OCR 噪声' : 'Benign OCR Noise'}**: **${summary.ocrNoiseCount || 0} ${isZh ? '处' : 'items'}**
+- **${isZh ? 'Jev 指标判定一致率' : 'Jev Metric Agreement'}**: **${summary.consistencyRate ?? 0}%**
 
 > **${isZh ? '审核裁定理由' : 'Audit Rationale'}**: ${summary.decisionReason || summary.summaryText}
 
@@ -50,7 +48,7 @@ ${summary.keyFindings.map((f, i) => `${i + 1}. ${f}`).join('\n')}
       md += `| ${idx + 1} | **${d.clauseTitle}** | ${typeTag} | ${riskTag} | ${d.riskCategory} | \`${d.originalText}\` | \`${d.ocrText}\` | ${d.analysis.replace(/\|/g, '\\|')} |\n`;
     });
   } else {
-    md += `| - | ${isZh ? '无重大差异' : 'No major differences'} | ${isZh ? '保持一致' : 'Identical'} | - | - | - | - | ${isZh ? '文本与原始合同完全吻合' : 'Text fully matches baseline'} |\n`;
+    md += `| - | ${isZh ? 'Jev 未返回结构化差异明细' : 'No structured difference details returned by Jev'} | - | - | - | - | - | - |\n`;
   }
 
   md += `\n---\n\n## 3. ${isZh ? 'Jev 原子指标判定表 (System One Rubric)' : 'Jev Atomic Evaluation Rubric'}\n\n`;
@@ -101,13 +99,13 @@ export function generateHtmlReport(report: ComparisonReport, lang: Language = 'z
   const decisionBadgeHtml = isAutoPass
     ? `<div style="background:#ffffff; border:1px solid #cbd5e1; border-left:4px solid #16a34a; padding:16px 20px; border-radius:8px; margin-bottom:24px;">
         <div style="font-size:18px; font-weight:600; color:#0f172a;">
-          ${isZh ? '🟢 审查结论：一致性极高，已准予【自动通过】(Auto-Pass)' : '🟢 Audit Decision: Auto-Pass Approved (High Consistency)'}
+          ${isZh ? '🟢 Jev 工作流结论：【自动通过】' : '🟢 Jev Workflow Decision: Auto-Pass'}
         </div>
         <p style="margin:8px 0 0 0; font-size:13px; color:#475569;">${summary.decisionReason}</p>
        </div>`
     : `<div style="background:#ffffff; border:1px solid #cbd5e1; border-left:4px solid #dc2626; padding:16px 20px; border-radius:8px; margin-bottom:24px;">
         <div style="font-size:18px; font-weight:600; color:#0f172a;">
-          ${isZh ? '🔴 审查结论：存在实质篡改风险，必须触发【人工 Review】' : '🔴 Audit Decision: Manual Review Required (Substantive Tampering Detected)'}
+          ${isZh ? '🔴 Jev 工作流结论：【人工 Review】' : '🔴 Jev Workflow Decision: Manual Review Required'}
         </div>
         <p style="margin:8px 0 0 0; font-size:13px; color:#475569;">${summary.decisionReason}</p>
        </div>`;
@@ -194,16 +192,8 @@ export function generateHtmlReport(report: ComparisonReport, lang: Language = 'z
 
     <div class="stat-grid">
       <div class="stat-card">
-        <div class="stat-title">${isZh ? '文本一致率' : 'Consistency Rate'}</div>
-        <div class="stat-val">${summary.consistencyRate || 96}%</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">${isZh ? '实质性篡改' : 'Substantive Tampering'}</div>
-        <div class="stat-val">${summary.tamperingCount || 0} ${isZh ? '处' : ''}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-title">${isZh ? 'OCR 识别噪声' : 'OCR Scan Noise'}</div>
-        <div class="stat-val">${summary.ocrNoiseCount || 0} ${isZh ? '处' : ''}</div>
+        <div class="stat-title">${isZh ? 'Jev 指标判定一致率' : 'Jev Metric Agreement'}</div>
+        <div class="stat-val">${summary.consistencyRate ?? 0}%</div>
       </div>
       <div class="stat-card">
         <div class="stat-title">${isZh ? '审查放行判定' : 'Audit Decision'}</div>

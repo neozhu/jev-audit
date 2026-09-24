@@ -31,7 +31,7 @@ Jev Audit breaks review criteria into independent Jev questions, evaluates each 
 
 ## Quick start
 
-You need Node.js and an OpenAI API key. If this is your first run, copy [`.env.example`](.env.example) to `.env` and set `OPENAI_API_KEY`. Keep an existing `.env` file if you already configured one.
+You need Node.js and a TypeSafe API key for contract comparison. An OpenAI API key is optional and is used only to generate questions. If this is your first run, copy [`.env.example`](.env.example) to `.env` and set `TYPESAFE_API_KEY`; set `OPENAI_API_KEY` only if you want GPT-assisted question generation. Keep an existing `.env` file if you already configured one.
 
 ```bash
 npm install
@@ -46,7 +46,7 @@ To explore the app, load a sample scenario, adjust the Jev criteria if needed, a
 
 1. In Portainer, select **Stacks → Add stack → Git repository**.
 2. Enter `https://github.com/neozhu/jev-audit.git` as the repository URL and `docker-compose.yml` as the Compose path.
-3. In the stack's **Environment variables** section, add `OPENAI_API_KEY` with your key. Optionally set `OPENAI_MODEL`, `TYPESAFE_API_KEY`, and `PORT`.
+3. In the stack's **Environment variables** section, add `TYPESAFE_API_KEY` with your key. Optionally set `OPENAI_API_KEY` (question generation only), `OPENAI_MODEL`, and `PORT`.
 4. Select **Deploy the stack** and open the host on port `3000`, or the port you configured.
 
 The Compose file uses `${OPENAI_API_KEY}` and the other Portainer stack variables; it does not use `env_file`. `OPENAI_MODEL` defaults to `gpt-6-luna`, `TYPESAFE_API_KEY` defaults to empty, and `PORT` defaults to `3000`. Keep real keys in Portainer rather than committing them to the repository.
@@ -57,13 +57,13 @@ Portainer builds the image from the cloned repository. On a remote Docker enviro
 
 | Variable | Purpose |
 | --- | --- |
-| `OPENAI_API_KEY` | Required for OpenAI model calls. Used on the server; never commit a real key. |
+| `OPENAI_API_KEY` | Optional. Used only for GPT-assisted Jev question generation; never used for contract comparison. |
 | `OPENAI_MODEL` | OpenAI model ID. Defaults to `gpt-6-luna`. |
-| `TYPESAFE_API_KEY` | Optional. When set, the app first calls the TypeSafe Jev System One API for atomic evaluations. `JEV_API_KEY` is also accepted. |
+| `TYPESAFE_API_KEY` | Required for contract comparison. All contract evaluation is performed exclusively by TypeSafe Jev System One. `JEV_API_KEY` is also accepted. |
 | `PORT` | Optional server port. Defaults to `3000`. |
 | `DISABLE_HMR` | Optional. Set to `true` to disable Vite hot reload in development. |
 
-See [`.env.example`](.env.example) for the full template. The server calls OpenAI through AI SDK. The default `gpt-6-luna` model uses `high` reasoning effort. Without a TypeSafe key, contract reviews use the OpenAI-powered Jev specification path.
+See [`.env.example`](.env.example) for the full template. GPT is isolated to question generation, while contract text evaluation always uses the TypeSafe Jev System One API. If a TypeSafe key is unavailable or the Jev request fails, comparison fails closed rather than falling back to GPT.
 
 ## How it works
 
