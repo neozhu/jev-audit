@@ -35,7 +35,7 @@ export const Header: React.FC<Props> = ({ onSelectPreset, onReset }) => {
   }>({
     hasTypeSafeKey: false,
     hasOpenAIKey: false,
-    engine: 'openai_jev_spec',
+    engine: 'jev_key_required',
     typesafeEndpoint: 'https://api.typesafe.ai/v1/systemone',
     model: 'jev-latest',
     openaiModel: 'gpt-6-luna',
@@ -242,7 +242,7 @@ export const Header: React.FC<Props> = ({ onSelectPreset, onReset }) => {
                   <div>• TYPESAFE_API_KEY: <strong className={engineStatus.hasTypeSafeKey ? 'text-emerald-700 font-bold' : 'text-slate-600'}>
                     {engineStatus.hasTypeSafeKey
                       ? (lang === 'zh' ? '已注入并就绪 (直连官方 Jev API)' : 'Injected & Ready (Connected to Jev API)')
-                      : (lang === 'zh' ? '未注入 (默认使用符合 Jev 规范的 OpenAI 引擎)' : 'Not injected (Defaults to OpenAI Jev Spec Engine)')}
+                      : (lang === 'zh' ? '未注入（合同比对不可用）' : 'Not configured (contract comparison unavailable)')}
                   </strong></div>
                 </div>
               </div>
@@ -265,18 +265,18 @@ export const Header: React.FC<Props> = ({ onSelectPreset, onReset }) => {
 
               <div className="space-y-2">
                 <h4 className="font-bold text-slate-900 text-xs">
-                  {lang === 'zh' ? '三、双引擎容灾机制 (Zero Downtime)' : '3. Dual-Engine Zero Downtime Reliability'}
+                  {lang === 'zh' ? '三、模型职责边界' : '3. Model responsibility boundary'}
                 </h4>
                 <p className="text-slate-600">
                   {lang === 'zh' ? (
                     <>
-                      - <strong>有 Key 时</strong>：系统优先调用 TypeSafe Jev 官方 System One 模型输出原生类型化概率结果；<br />
-                      - <strong>无 TypeSafe Key 或其网络故障时</strong>：系统改用 OpenAI Jev-Specification 引擎；OpenAI 不可用时使用本地规则评估。
+                      - <strong>合同比对</strong>：仅调用 TypeSafe Jev 官方 System One 模型；<br />
+                      - <strong>GPT</strong>：仅用于生成 Jev 原子问题，不读取或参与合同比对结果。
                     </>
                   ) : (
                     <>
-                      - <strong>With Key</strong>: Prioritizes official TypeSafe Jev System One model for native typed probability outputs;<br />
-                      - <strong>Without a TypeSafe key or on its network failure</strong>: Uses the OpenAI Jev-Specification engine; if OpenAI is unavailable, local rules evaluate the contract.
+                      - <strong>Contract comparison</strong>: Uses only the official TypeSafe Jev System One model;<br />
+                      - <strong>GPT</strong>: Only generates Jev atomic questions and never evaluates contract content or results.
                     </>
                   )}
                 </p>

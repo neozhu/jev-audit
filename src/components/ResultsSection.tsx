@@ -20,18 +20,28 @@ interface Props {
 
 export const ResultsSection: React.FC<Props> = ({ report }) => {
   const { lang, t } = useI18n();
-  const { textA, textB, summary, items = [], tamperingDetails = [] } = report;
+  const { textA, textB, titleA, titleB, summary, items = [], tamperingDetails = [] } = report;
 
   const [reviewedItems, setReviewedItems] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
   const [showFullDiff, setShowFullDiff] = useState(false);
-  const [showJevRaw, setShowJevRaw] = useState(false);
+  const [showJevRaw, setShowJevRaw] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'tampering' | 'ocr_noise'>('all');
 
   const isAutoPass = summary.contractDecision === 'auto_pass';
   const tamperingCount = summary.tamperingCount || 0;
   const ocrNoiseCount = summary.ocrNoiseCount || 0;
-  const consistencyRate = summary.consistencyRate || 95;
+  const consistencyRate = summary.consistencyRate ?? 0;
+  const hasStructuredDifferences = tamperingDetails.length > 0;
+
+  const formatAnswer = (answer: typeof items[number]['answerA']) => {
+    if (answer.noulResult) {
+      return `${answer.noulResult.value ? (lang === 'zh' ? '是' : 'Yes') : (lang === 'zh' ? '否' : 'No')} · ${Math.round(answer.noulResult.probability * 100)}%`;
+    }
+    if (answer.choiceResult) return answer.choiceResult.selectedLabel || answer.choiceResult.selectedId;
+    if (answer.scoreResult) return `${answer.scoreResult.score} / ${answer.scoreResult.maxScore}`;
+    return lang === 'zh' ? 'Jev 未返回结果' : 'No Jev result';
+  };
 
   const toggleReview = (id: string) => {
     setReviewedItems((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -49,14 +59,12 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
     const isZh = lang === 'zh';
     const text = isZh
       ? `【合同比对与防篡改审查结论】\n` +
-        `决策结果: ${isAutoPass ? '🟢 准予自动通过 (仅含良性OCR字符噪声)' : '🔴 需人工 Review (检出实质性条款篡改)'}\n` +
-        `一致率: ${consistencyRate}%\n` +
-        `实质篡改: ${tamperingCount} 处 | 良性OCR噪点: ${ocrNoiseCount} 处\n` +
+        `Jev 决策结果: ${isAutoPass ? '🟢 自动通过' : '🔴 需人工 Review'}\n` +
+        `Jev 指标判定一致率: ${consistencyRate}%\n` +
         `结论说明: ${summary.decisionReason || summary.summaryText}`
       : `[Contract Comparison & Anti-Tampering Audit Verdict]\n` +
-        `Decision: ${isAutoPass ? '🟢 Auto-Pass Approved (Benign OCR noise only)' : '🔴 Manual Review Required (Substantive Tampering Detected)'}\n` +
-        `Consistency Rate: ${consistencyRate}%\n` +
-        `Substantive Tampering: ${tamperingCount} items | OCR Noise: ${ocrNoiseCount} items\n` +
+        `Jev Decision: ${isAutoPass ? '🟢 Auto-Pass' : '🔴 Manual Review Required'}\n` +
+        `Jev Metric Agreement: ${consistencyRate}%\n` +
         `Findings: ${summary.decisionReason || summary.summaryText}`;
 
     navigator.clipboard.writeText(text);
@@ -103,12 +111,14 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
                 <span className="font-medium text-slate-700">
                   {t.results.consistencyRate}: {consistencyRate}%
                 </span>
-                <span aria-hidden="true">·</span>
-                <span className={tamperingCount > 0 ? 'text-rose-700 font-semibold' : 'text-slate-600'}>
-                  {t.results.tamperingCount}: {tamperingCount} {lang === 'zh' ? '处' : ''}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>{t.results.ocrNoiseCount}: {ocrNoiseCount} {lang === 'zh' ? '处' : ''}</span>
+                {hasStructuredDifferences && <>
+                  <span aria-hidden="true">·</span>
+                  <span className={tamperingCount > 0 ? 'text-rose-700 font-semibold' : 'text-slate-600'}>
+                    {t.results.tamperingCount}: {tamperingCount} {lang === 'zh' ? '处' : ''}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>{t.results.ocrNoiseCount}: {ocrNoiseCount} {lang === 'zh' ? '处' : ''}</span>
+                </>}
                 <span aria-hidden="true">·</span>
                 <span className="text-slate-400">{t.results.ruleNotice}</span>
               </div>
@@ -146,8 +156,8 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
         </div>
       </div>
 
-      {/* 2. 差异清单卡片 */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+      {/* 2. Jev 返回结构化差异时才展示风险清单，避免把缺失数据呈现为 0。 */}
+      {hasStructuredDifferences && <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         {/* 标题栏与简单过滤 */}
         <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/70 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
@@ -293,7 +303,7 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
             })
           )}
         </div>
-      </div>
+      </div>}
 
       {/* 3. 辅助折叠面板：全文高亮比对 */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
@@ -357,7 +367,7 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
         )}
       </div>
 
-      {/* 4. 辅助折叠面板：Jev 原始原子推断数据 */}
+      {/* 4. Jev 原生原子推断结果 */}
       {items.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
           <button
@@ -367,8 +377,8 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
           >
             <span>
               {lang === 'zh'
-                ? `查看 Jev 原子指标推断详情 (${items.length} 项)`
-                : `View Jev Atomic Inferences (${items.length} metrics)`}
+                ? `Jev 原生指标结果 (${items.length} 项)`
+                : `Native Jev Metric Results (${items.length} metrics)`}
             </span>
             {showJevRaw ? (
               <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
@@ -398,8 +408,27 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
                         : t.results.verdictDiverged}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    {item.deltaSummary || item.answerA?.reasoning}
+                  <div className="grid md:grid-cols-2 gap-2 pt-2">
+                    {[{ title: titleA, answer: item.answerA }, { title: titleB, answer: item.answerB }].map(({ title, answer }) => (
+                      <div key={title} className="rounded-md border border-slate-200 bg-slate-50 p-2 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-slate-700 truncate">{title}</span>
+                          <span className="font-semibold text-slate-900">{formatAnswer(answer)}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-relaxed">{answer.reasoning}</p>
+                        {answer.evidenceQuotes && answer.evidenceQuotes.length > 0 && (
+                          <div className="text-[10px] text-slate-500 border-l-2 border-slate-300 pl-2">
+                            {answer.evidenceQuotes.join('；')}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-400">
+                          {lang === 'zh' ? 'Jev 置信度' : 'Jev confidence'}: {Math.round(answer.confidence * 100)}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-slate-500 pt-1">
+                    {item.deltaSummary}
                   </div>
                 </div>
               ))}
