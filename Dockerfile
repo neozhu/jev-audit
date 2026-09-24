@@ -19,6 +19,8 @@ RUN bun install --frozen-lockfile --production
 COPY --from=build /app/dist ./dist
 COPY server.ts ./server.ts
 COPY src/types/jev.ts ./src/types/jev.ts
+COPY src/utils/consistency.ts ./src/utils/consistency.ts
+COPY src/data/presets.ts ./src/data/presets.ts
 
 USER bun
 EXPOSE 3000
