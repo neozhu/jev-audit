@@ -10,6 +10,8 @@ An AI-powered contract comparison tool built around **Jev atomic evaluations**. 
 
 `Jev` · `Contract Audit` · `OCR Noise Detection` · `OpenAI` · `AI SDK`
 
+https://jev-audit.blazorserver.com/
+
 </div>
 
 ## Why Jev Audit?
