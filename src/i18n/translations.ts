@@ -198,7 +198,7 @@ export const translations: Record<Language, Translations> = {
       all: '全部',
     },
     header: {
-      appTitle: 'AI 合同比对与防篡改审查工具',
+      appTitle: 'Jev Audit',
       appSubtitle: 'Jev 评估合同实质一致性 · 得分超过 90% 自动通过',
       jevConnected: 'TypeSafe Jev (已连接)',
       jevEngine: 'Jev 评测引擎',
@@ -376,7 +376,7 @@ export const translations: Record<Language, Translations> = {
       all: 'All',
     },
     header: {
-      appTitle: 'AI Contract Comparison & Anti-Tampering Audit',
+      appTitle: 'Jev Audit',
       appSubtitle: 'Jev contract consistency · Auto-pass above 90%',
       jevConnected: 'TypeSafe Jev (Connected)',
       jevEngine: 'Jev Audit Engine',

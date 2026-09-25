@@ -6,7 +6,7 @@
 
 An AI-powered contract comparison tool built around **Jev atomic evaluations**. Compare a baseline contract with text extracted from a scanned copy, separate substantive changes from OCR noise, and turn the findings into a reviewable report.
 
-<img src="assets/jev-audit-hero.png" alt="Jev Audit comparing a baseline contract with a scanned copy and highlighting differences for review" width="100%" />
+<img src="assets/jev-audit-hero.png" alt="TypeSafe Jev compares a clean contract with a scanned copy, filters OCR noise, and presents findings for review" width="100%" />
 
 `Jev` · `Contract Audit` · `OCR Noise Detection` · `OpenAI` · `AI SDK`
 
