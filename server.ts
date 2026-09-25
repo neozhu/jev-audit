@@ -155,6 +155,7 @@ app.post('/api/compare', async (req, res) => {
     return res.json({
       consistencyRate,
       contractDecision,
+      rawJevResponse: result,
       evaluations: config.questions.map((question) => ({
         question,
         answer: answers[question.id] as JevRawAnswer,

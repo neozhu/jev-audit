@@ -32,3 +32,24 @@ test('rejects a Choice without a defined consistency mapping', () => {
   delete choice.consistentChoices;
   assert.equal(isValidConsistencyConfig(config), false);
 });
+
+test('default rubric gives higher impact to substantive mismatches than degree uncertainty', () => {
+  for (const lang of ['zh', 'en'] as const) {
+    const questions = createConsistencyConfig(lang).questions;
+    assert.ok(Math.abs(questions.reduce((sum, question) => sum + (question.weight ?? 0), 0) - 1) < 1e-10);
+    const matching = {
+      substantive_match: { type: 'noul', noul: 1 },
+      human_edit_signs: { type: 'noul', noul: 0 },
+      difference_type: { type: 'choice', choice: 'same', probabilities: { same: 1, ocr: 0, changed: 0, unrelated: 0 } },
+      consistency_degree: { type: 'score', score: 4 },
+    };
+    const rates = [
+      { ...matching, substantive_match: { type: 'noul', noul: 0.5 } },
+      { ...matching, human_edit_signs: { type: 'noul', noul: 0.5 } },
+      { ...matching, difference_type: { type: 'choice', choice: 'changed', probabilities: { same: 0.5, ocr: 0, changed: 0.5, unrelated: 0 } } },
+      { ...matching, consistency_degree: { type: 'score', score: 2 } },
+    ].map((answers) => calculateConsistency(questions, answers).consistencyRate);
+
+    assert.ok(rates[0] < rates[1] && rates[1] < rates[2] && rates[2] < rates[3]);
+  }
+});

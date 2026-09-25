@@ -23,15 +23,21 @@ import {
 interface Props {
   config: JevEvaluationConfig;
   onChangeConfig: (newConfig: JevEvaluationConfig) => void;
+  titleA: string;
   textA: string;
+  titleB: string;
   textB: string;
+  onChangeState: (state: { titleA: string; textA: string; titleB: string; textB: string }) => void;
 }
 
 export const JevConfigSection: React.FC<Props> = ({
   config,
   onChangeConfig,
+  titleA,
   textA,
+  titleB,
   textB,
+  onChangeState,
 }) => {
   const { lang, t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,7 +81,14 @@ export const JevConfigSection: React.FC<Props> = ({
   };
 
   const handleOpenJsonModal = () => {
-    setRawJsonText(JSON.stringify(config, null, 2));
+    setRawJsonText(JSON.stringify({
+      state: {
+        baseline: { title: titleA, text: textA },
+        scanned: { title: titleB, text: textB },
+        comparisonPolicy: config.systemInstruction,
+      },
+      questions: config.questions,
+    }, null, 2));
     setJsonError(null);
     setShowJsonModal(true);
   };
@@ -83,13 +96,30 @@ export const JevConfigSection: React.FC<Props> = ({
   const handleSaveJson = () => {
     try {
       const parsed = JSON.parse(rawJsonText);
-      if (!isValidConsistencyConfig(parsed)) {
+      const state = parsed.state;
+      if (state !== undefined && (
+        !state || typeof state.baseline?.title !== 'string' || typeof state.baseline?.text !== 'string' ||
+        typeof state.scanned?.title !== 'string' || typeof state.scanned?.text !== 'string' ||
+        typeof state.comparisonPolicy !== 'string'
+      )) {
+        throw new Error(lang === 'zh' ? 'state 的标题、文本或评测指令无效' : 'Invalid state titles, texts, or comparison policy');
+      }
+      const systemInstruction = state ? state.comparisonPolicy : parsed.systemInstruction;
+      if (!isValidConsistencyConfig({ systemInstruction, questions: parsed.questions })) {
         throw new Error(lang === 'zh' ? '问题类型、选项或计分配置无效' : 'Invalid question types, options, or scoring configuration');
       }
       onChangeConfig({
-        systemInstruction: parsed.systemInstruction || '',
+        systemInstruction,
         questions: parsed.questions,
       });
+      if (state) {
+        onChangeState({
+          titleA: state.baseline.title,
+          textA: state.baseline.text,
+          titleB: state.scanned.title,
+          textB: state.scanned.text,
+        });
+      }
       setShowJsonModal(false);
     } catch (e: any) {
       setJsonError((lang === 'zh' ? 'JSON 格式有误: ' : 'Invalid JSON format: ') + e.message);
@@ -127,7 +157,7 @@ export const JevConfigSection: React.FC<Props> = ({
             type="button"
             onClick={handleOpenJsonModal}
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-            title={lang === 'zh' ? '查看或导入 Jev JSON 配置' : 'View or import raw JSON configuration'}
+            title={lang === 'zh' ? '查看或导入 Jev state 与问题 JSON' : 'View or import Jev state and questions JSON'}
           >
             <Code className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{t.rubric.rawJson}</span>
@@ -321,7 +351,7 @@ export const JevConfigSection: React.FC<Props> = ({
               <div className="flex items-center gap-2">
                 <FileJson className="w-4 h-4 text-slate-700" />
                 <h3 className="font-semibold text-slate-800 text-sm">
-                  {lang === 'zh' ? '编辑 Jev 配置 JSON' : 'Edit Jev Configuration JSON'}
+                  {lang === 'zh' ? '编辑 Jev state 与问题 JSON' : 'Edit Jev State & Questions JSON'}
                 </h3>
               </div>
               <button
@@ -335,8 +365,8 @@ export const JevConfigSection: React.FC<Props> = ({
             <div className="p-6 flex-1 overflow-hidden flex flex-col">
               <p className="text-xs text-slate-500 mb-2">
                 {lang === 'zh'
-                  ? '您可以直接复制、粘贴或备份符合 Jev 规范的原子指标 JSON 配置：'
-                  : 'You can directly copy, paste, or inspect compliant Jev atomic questions JSON:'}
+                  ? '可编辑 state 中的两份文本、标题、评测指令，以及 Jev 原子问题：'
+                  : 'Edit the two texts, titles, comparison policy, and Jev atomic questions in JSON:'}
               </p>
               <textarea
                 value={rawJsonText}

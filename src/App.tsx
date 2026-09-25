@@ -136,7 +136,8 @@ export default function App() {
 
       const data = await response.json();
       if (!Number.isFinite(data.consistencyRate) || !['auto_pass', 'require_human_review'].includes(data.contractDecision) ||
-          !Array.isArray(data.evaluations) || data.evaluations.length !== config.questions.length) {
+          !Array.isArray(data.evaluations) || data.evaluations.length !== config.questions.length ||
+          !data.rawJevResponse || typeof data.rawJevResponse !== 'object') {
         throw new Error(isZh ? 'Jev 未返回有效的一致性结果。' : 'Jev did not return a valid consistency result.');
       }
       setReport(data as ConsistencyResult);
@@ -178,8 +179,17 @@ export default function App() {
         <JevConfigSection
           config={config}
           onChangeConfig={(value) => { setConfig(value); setReport(null); }}
+          titleA={titleA}
           textA={textA}
+          titleB={titleB}
           textB={textB}
+          onChangeState={({ titleA, textA, titleB, textB }) => {
+            setTitleA(titleA);
+            setTextA(textA);
+            setTitleB(titleB);
+            setTextB(textB);
+            setReport(null);
+          }}
         />
 
         {/* Section 3: Execution Control Bar */}

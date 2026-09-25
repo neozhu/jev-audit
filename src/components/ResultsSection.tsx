@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ConsistencyResult } from '../types/jev';
 import { useI18n } from '../i18n/context';
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Code, X } from 'lucide-react';
 
 interface Props {
   report: ConsistencyResult;
@@ -9,6 +9,7 @@ interface Props {
 
 export const ResultsSection: React.FC<Props> = ({ report }) => {
   const { lang } = useI18n();
+  const [showRawJson, setShowRawJson] = useState(false);
   const isZh = lang === 'zh';
   const { consistencyRate, contractDecision, evaluations } = report;
   const isAutoPass = contractDecision === 'auto_pass';
@@ -27,7 +28,13 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
         </p>
       </div>
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs" aria-label={isZh ? 'Jev 逐题回复' : 'Jev answers by question'}>
-        <h2 className="text-sm font-semibold text-slate-900">{isZh ? 'Jev 逐题回复 · 人工复核' : 'Jev answers · manual review'}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">{isZh ? 'Jev 逐题回复 · 人工复核' : 'Jev answers · manual review'}</h2>
+          <button type="button" onClick={() => setShowRawJson(true)} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
+            <Code className="h-3.5 w-3.5" />
+            {isZh ? '查看 Jev 原始回复 JSON' : 'View raw Jev response JSON'}
+          </button>
+        </div>
         <p className="mt-1 text-xs text-slate-500">{isZh ? 'Choice 和 Score 的置信度由 Jev 返回；Noul 没有独立置信度，以下展示是/否概率。' : 'Choice and Score confidence comes from Jev. Noul has no separate confidence field, so its yes/no probabilities are shown.'}</p>
         <div className="mt-4 space-y-3">
           {evaluations.map(({ question, answer }, index) => {
@@ -73,6 +80,19 @@ export const ResultsSection: React.FC<Props> = ({ report }) => {
           })}
         </div>
       </section>
+      {showRawJson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs" role="dialog" aria-modal="true" aria-labelledby="raw-jev-json-title">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h3 id="raw-jev-json-title" className="text-sm font-semibold text-slate-900">{isZh ? 'Jev 原始回复 JSON' : 'Raw Jev response JSON'}</h3>
+              <button type="button" onClick={() => setShowRawJson(false)} aria-label={isZh ? '关闭' : 'Close'} className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 cursor-pointer">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <pre className="overflow-auto p-6 text-xs leading-relaxed text-slate-700 whitespace-pre-wrap break-words">{JSON.stringify(report.rawJevResponse, null, 2)}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

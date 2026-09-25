@@ -78,6 +78,7 @@ export type ContractDecision = 'auto_pass' | 'require_human_review' | 'rejected'
 export interface ConsistencyResult {
   consistencyRate: number;
   contractDecision: 'auto_pass' | 'require_human_review';
+  rawJevResponse: unknown;
   evaluations: JevQuestionEvaluation[];
 }
 

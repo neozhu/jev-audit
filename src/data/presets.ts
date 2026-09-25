@@ -30,7 +30,7 @@ export const createConsistencyConfig = (lang: Language): JevEvaluationConfig => 
           : 'Ignoring OCR and formatting differences that do not change meaning, do the terms in `baseline.text` and `scanned.text` have the same legal and commercial meaning?',
         noulPrompt: isZh ? '所有实质条款相同' : 'All substantive terms match',
         noulFalsePrompt: isZh ? '至少一项实质条款被改变、增加或删去' : 'At least one substantive term changed, was added, or was removed',
-        weight: 1,
+        weight: 0.4,
       },
       {
         id: 'human_edit_signs',
@@ -42,7 +42,7 @@ export const createConsistencyConfig = (lang: Language): JevEvaluationConfig => 
         noulPrompt: isZh ? '存在不能用 OCR 噪声解释的实质修改迹象' : 'There are substantive edit signs that OCR noise cannot explain',
         noulFalsePrompt: isZh ? '不存在此类迹象' : 'There are no such signs',
         invertForConsistency: true,
-        weight: 1,
+        weight: 0.3,
       },
       {
         id: 'difference_type',
@@ -65,7 +65,7 @@ export const createConsistencyConfig = (lang: Language): JevEvaluationConfig => 
               { id: 'unrelated', label: 'The texts are not corresponding content' },
             ],
         consistentChoices: ['same', 'ocr'],
-        weight: 1,
+        weight: 0.2,
       },
       {
         id: 'consistency_degree',
@@ -91,7 +91,7 @@ export const createConsistencyConfig = (lang: Language): JevEvaluationConfig => 
               { score: 3, label: 'Terms mostly match but some points remain uncertain' },
               { score: 4, label: 'All substantive terms match; differences are harmless OCR or formatting noise' },
             ],
-        weight: 1,
+        weight: 0.1,
       },
     ],
   };
